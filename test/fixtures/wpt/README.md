@@ -13,8 +13,8 @@ Last update:
 - common: https://github.com/web-platform-tests/wpt/tree/dbd648158d/common
 - compression: https://github.com/web-platform-tests/wpt/tree/5aa50dd415/compression
 - console: https://github.com/web-platform-tests/wpt/tree/767ae35464/console
-- dom/abort: https://github.com/web-platform-tests/wpt/tree/d1f1ecbd52/dom/abort
-- dom/events: https://github.com/web-platform-tests/wpt/tree/ab8999891c/dom/events
+- dom/abort: https://github.com/web-platform-tests/wpt/tree/0143fe244b/dom/abort
+- dom/events: https://github.com/web-platform-tests/wpt/tree/0a811c5161/dom/events
 - encoding: https://github.com/web-platform-tests/wpt/tree/5aa50dd415/encoding
 - fetch/data-urls/resources: https://github.com/web-platform-tests/wpt/tree/7c79d998ff/fetch/data-urls/resources
 - FileAPI: https://github.com/web-platform-tests/wpt/tree/cceaf3628d/FileAPI
@@ -27,12 +27,12 @@ Last update:
 - performance-timeline: https://github.com/web-platform-tests/wpt/tree/17ebc3aea0/performance-timeline
 - resource-timing: https://github.com/web-platform-tests/wpt/tree/22d38586d0/resource-timing
 - resources: https://github.com/web-platform-tests/wpt/tree/1e140d63ec/resources
-- streams: https://github.com/web-platform-tests/wpt/tree/9b03282a99/streams
+- streams: https://github.com/web-platform-tests/wpt/tree/2bd26e124c/streams
 - url: https://github.com/web-platform-tests/wpt/tree/6a39784534/url
 - user-timing: https://github.com/web-platform-tests/wpt/tree/5ae85bf826/user-timing
 - wasm/jsapi: https://github.com/web-platform-tests/wpt/tree/cde25e7e3c/wasm/jsapi
 - wasm/webapi: https://github.com/web-platform-tests/wpt/tree/fd1b23eeaa/wasm/webapi
-- WebCryptoAPI: https://github.com/web-platform-tests/wpt/tree/5e042cbc4e/WebCryptoAPI
+- WebCryptoAPI: https://github.com/web-platform-tests/wpt/tree/203d2ac459/WebCryptoAPI
 - webidl/ecmascript-binding/es-exceptions: https://github.com/web-platform-tests/wpt/tree/a370aad338/webidl/ecmascript-binding/es-exceptions
 - webmessaging/broadcastchannel: https://github.com/web-platform-tests/wpt/tree/e97fac4791/webmessaging/broadcastchannel
 - webstorage: https://github.com/web-platform-tests/wpt/tree/9dafa89214/webstorage

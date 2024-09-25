@@ -46,6 +46,7 @@ expected.beforePreExec = new Set([
   'NativeModule internal/assert',
   'NativeModule internal/util/inspect',
   'NativeModule internal/util/debuglog',
+  'NativeModule internal/streams/utils',
   'NativeModule internal/timers',
   'NativeModule events',
   'Internal Binding buffer',
@@ -116,7 +117,6 @@ expected.atRunTime = new Set([
 
 if (common.isMainThread) {
   [
-    'NativeModule internal/idna',
     'NativeModule url',
   ].forEach(expected.beforePreExec.add.bind(expected.beforePreExec));
 } else {  // Worker.

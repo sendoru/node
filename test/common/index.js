@@ -30,7 +30,7 @@ const net = require('net');
 // Do not require 'os' until needed so that test-os-checked-function can
 // monkey patch it. If 'os' is required here, that test will fail.
 const path = require('path');
-const { inspect } = require('util');
+const { inspect, getCallSite } = require('util');
 const { isMainThread } = require('worker_threads');
 const { isModuleNamespaceObject } = require('util/types');
 
@@ -143,6 +143,8 @@ const isOpenBSD = process.platform === 'openbsd';
 const isLinux = process.platform === 'linux';
 const isMacOS = process.platform === 'darwin';
 const isASan = process.config.variables.asan === 1;
+const isRiscv64 = process.arch === 'riscv64';
+const isDebug = process.features.debug;
 const isPi = (() => {
   try {
     // Normal Raspberry Pi detection is to find the `Raspberry Pi` string in
@@ -280,7 +282,7 @@ function platformTimeout(ms) {
   const multipliers = typeof ms === 'bigint' ?
     { two: 2n, four: 4n, seven: 7n } : { two: 2, four: 4, seven: 7 };
 
-  if (process.features.debug)
+  if (isDebug)
     ms = multipliers.two * ms;
 
   if (exports.isAIX || exports.isIBMi)
@@ -288,6 +290,10 @@ function platformTimeout(ms) {
 
   if (isPi)
     return multipliers.two * ms;  // Raspberry Pi devices
+
+  if (isRiscv64) {
+    return multipliers.four * ms;
+  }
 
   return ms;
 }
@@ -545,25 +551,13 @@ function canCreateSymLink() {
   return true;
 }
 
-function getCallSite(top) {
-  const originalStackFormatter = Error.prepareStackTrace;
-  Error.prepareStackTrace = (err, stack) =>
-    `${stack[0].getFileName()}:${stack[0].getLineNumber()}`;
-  const err = new Error();
-  Error.captureStackTrace(err, top);
-  // With the V8 Error API, the stack is not formatted until it is accessed
-  err.stack; // eslint-disable-line no-unused-expressions
-  Error.prepareStackTrace = originalStackFormatter;
-  return err.stack;
-}
-
 function mustNotCall(msg) {
-  const callSite = getCallSite(mustNotCall);
+  const callSite = getCallSite()[1];
   return function mustNotCall(...args) {
     const argsInfo = args.length > 0 ?
       `\ncalled with arguments: ${args.map((arg) => inspect(arg)).join(', ')}` : '';
     assert.fail(
-      `${msg || 'function should not have been called'} at ${callSite}` +
+      `${msg || 'function should not have been called'} at ${callSite.scriptName}:${callSite.lineNumber}` +
       argsInfo);
   };
 }
@@ -850,30 +844,6 @@ function skipIfDumbTerminal() {
   }
 }
 
-function gcUntil(name, condition) {
-  if (typeof name === 'function') {
-    condition = name;
-    name = undefined;
-  }
-  return new Promise((resolve, reject) => {
-    let count = 0;
-    function gcAndCheck() {
-      setImmediate(() => {
-        count++;
-        global.gc();
-        if (condition()) {
-          resolve();
-        } else if (count < 10) {
-          gcAndCheck();
-        } else {
-          reject(name === undefined ? undefined : 'Test ' + name + ' failed');
-        }
-      });
-    }
-    gcAndCheck();
-  });
-}
-
 function requireNoPackageJSONAbove(dir = __dirname) {
   let possiblePackage = path.join(dir, '..', 'package.json');
   let lastPackage = null;
@@ -984,10 +954,8 @@ const common = {
   expectsError,
   expectRequiredModule,
   expectWarning,
-  gcUntil,
   getArrayBufferViews,
   getBufferSources,
-  getCallSite,
   getPrintedStackTrace,
   getTTYfd,
   hasIntl,
@@ -998,6 +966,7 @@ const common = {
   invalidArgTypeHelper,
   isAlive,
   isASan,
+  isDebug,
   isDumbTerminal,
   isFreeBSD,
   isLinux,

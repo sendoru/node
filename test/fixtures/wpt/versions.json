@@ -12,11 +12,11 @@
     "path": "console"
   },
   "dom/abort": {
-    "commit": "d1f1ecbd52f2eab3b7fe5dc1b20b41174f1341ce",
+    "commit": "0143fe244b3d622441717ce630e0114eb204f9a7",
     "path": "dom/abort"
   },
   "dom/events": {
-    "commit": "ab8999891c6225bef1741c2960033aad620481a8",
+    "commit": "0a811c51619b14f78fec60ba7dd1603795ca6a21",
     "path": "dom/events"
   },
   "encoding": {
@@ -68,7 +68,7 @@
     "path": "resources"
   },
   "streams": {
-    "commit": "9b03282a99ef2314c1c2d5050a105a74a2940019",
+    "commit": "2bd26e124cf17b2f0a25c150794d640b07b2a870",
     "path": "streams"
   },
   "url": {
@@ -88,7 +88,7 @@
     "path": "wasm/webapi"
   },
   "WebCryptoAPI": {
-    "commit": "5e042cbc4ecab7b2279a5fd411c6daa24ca886c6",
+    "commit": "203d2ac45900139633d4f3f29750ea4b5e06d6f5",
     "path": "WebCryptoAPI"
   },
   "webidl/ecmascript-binding/es-exceptions": {

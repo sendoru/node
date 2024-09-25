@@ -1855,6 +1855,12 @@ the worker thread.
 There was a bug in Node.js or incorrect usage of Node.js internals.
 To fix the error, open an issue at <https://github.com/nodejs/node/issues>.
 
+<a id="ERR_INVALID_ADDRESS"></a>
+
+### `ERR_INVALID_ADDRESS`
+
+The provided address is not understood by the Node.js API.
+
 <a id="ERR_INVALID_ADDRESS_FAMILY"></a>
 
 ### `ERR_INVALID_ADDRESS_FAMILY`
@@ -2567,6 +2573,12 @@ disconnected socket.
 
 A call was made and the UDP subsystem was not running.
 
+<a id="ERR_SOURCE_MAP_MISSING_SOURCE"></a>
+
+### `ERR_SOURCE_MAP_MISSING_SOURCE`
+
+A file imported from a source map was not found.
+
 <a id="ERR_SQLITE_ERROR"></a>
 
 ### `ERR_SQLITE_ERROR`
@@ -2797,9 +2809,9 @@ event is emitted before continuing.
 Attempting to set a TLS protocol `minVersion` or `maxVersion` conflicts with an
 attempt to set the `secureProtocol` explicitly. Use one mechanism or the other.
 
-<a id="ERR_TLS_PSK_SET_IDENTIY_HINT_FAILED"></a>
+<a id="ERR_TLS_PSK_SET_IDENTITY_HINT_FAILED"></a>
 
-### `ERR_TLS_PSK_SET_IDENTIY_HINT_FAILED`
+### `ERR_TLS_PSK_SET_IDENTITY_HINT_FAILED`
 
 Failed to set PSK identity hint. Hint may be too long.
 
@@ -3189,7 +3201,7 @@ changes:
 -->
 
 Too much HTTP header data was received. In order to protect against malicious or
-malconfigured clients, if more than 8 KiB of HTTP header data is received then
+malconfigured clients, if more than `maxHeaderSize` of HTTP header data is received then
 HTTP parsing will abort without a request or response object being created, and
 an `Error` with this code will be emitted.
 
@@ -4020,7 +4032,7 @@ An error occurred trying to allocate memory. This should never happen.
 #### `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`
 
 <!-- YAML
-added: REPLACEME
+added: v22.6.0
 -->
 
 Type stripping is not supported for files descendent of a `node_modules` directory.

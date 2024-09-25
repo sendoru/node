@@ -88,6 +88,12 @@ using v8::Value;
 # define S_ISDIR(mode)  (((mode) & S_IFMT) == S_IFDIR)
 #endif
 
+#ifdef __POSIX__
+constexpr char kPathSeparator = '/';
+#else
+const char* const kPathSeparator = "\\/";
+#endif
+
 inline int64_t GetOffset(Local<Value> value) {
   return IsSafeJsInt(value) ? value.As<Integer>()->Value() : -1;
 }
@@ -1057,14 +1063,12 @@ static int32_t FastInternalModuleStat(
     const FastOneByteString& input,
     // NOLINTNEXTLINE(runtime/references) This is V8 api.
     FastApiCallbackOptions& options) {
-  Environment* env = Environment::GetCurrent(recv->GetCreationContextChecked());
+  Environment* env = Environment::GetCurrent(options.isolate);
+  HandleScope scope(env->isolate());
 
   auto path = std::filesystem::path(input.data, input.data + input.length);
-  if (UNLIKELY(!env->permission()->is_granted(
-          env, permission::PermissionScope::kFileSystemRead, path.string()))) {
-    options.fallback = true;
-    return -1;
-  }
+  THROW_IF_INSUFFICIENT_PERMISSIONS(
+      env, permission::PermissionScope::kFileSystemRead, path.string(), -1);
 
   switch (std::filesystem::status(path).type()) {
     case std::filesystem::file_type::directory:
@@ -1743,9 +1747,9 @@ int MKDirpSync(uv_loop_t* loop,
           return err;
         }
         case UV_ENOENT: {
-          auto filesystem_path = std::filesystem::path(next_path);
-          if (filesystem_path.has_parent_path()) {
-            std::string dirname = filesystem_path.parent_path().string();
+          std::string dirname =
+              next_path.substr(0, next_path.find_last_of(kPathSeparator));
+          if (dirname != next_path) {
             req_wrap->continuation_data()->PushPath(std::move(next_path));
             req_wrap->continuation_data()->PushPath(std::move(dirname));
           } else if (req_wrap->continuation_data()->paths().empty()) {
@@ -1823,9 +1827,9 @@ int MKDirpAsync(uv_loop_t* loop,
           break;
         }
         case UV_ENOENT: {
-          auto filesystem_path = std::filesystem::path(path);
-          if (filesystem_path.has_parent_path()) {
-            std::string dirname = filesystem_path.parent_path().string();
+          std::string dirname =
+              path.substr(0, path.find_last_of(kPathSeparator));
+          if (dirname != path) {
             req_wrap->continuation_data()->PushPath(path);
             req_wrap->continuation_data()->PushPath(std::move(dirname));
           } else if (req_wrap->continuation_data()->paths().empty()) {
@@ -3132,15 +3136,16 @@ static void CpSyncCheckPaths(const FunctionCallbackInfo<Value>& args) {
   ToNamespacedPath(env, &src);
   THROW_IF_INSUFFICIENT_PERMISSIONS(
       env, permission::PermissionScope::kFileSystemRead, src.ToStringView());
-  auto src_path = std::filesystem::path(src.ToStringView());
+
+  auto src_path = std::filesystem::path(src.ToU8StringView());
 
   BufferValue dest(isolate, args[1]);
   CHECK_NOT_NULL(*dest);
   ToNamespacedPath(env, &dest);
   THROW_IF_INSUFFICIENT_PERMISSIONS(
       env, permission::PermissionScope::kFileSystemWrite, dest.ToStringView());
-  auto dest_path = std::filesystem::path(dest.ToStringView());
 
+  auto dest_path = std::filesystem::path(dest.ToU8StringView());
   bool dereference = args[2]->IsTrue();
   bool recursive = args[3]->IsTrue();
 
@@ -3148,8 +3153,16 @@ static void CpSyncCheckPaths(const FunctionCallbackInfo<Value>& args) {
   auto src_status = dereference
                         ? std::filesystem::symlink_status(src_path, error_code)
                         : std::filesystem::status(src_path, error_code);
+
   if (error_code) {
-    return env->ThrowUVException(EEXIST, "lstat", nullptr, src.out());
+#ifdef _WIN32
+    int errorno = uv_translate_sys_error(error_code.value());
+#else
+    int errorno =
+        error_code.value() > 0 ? -error_code.value() : error_code.value();
+#endif
+    return env->ThrowUVException(
+        errorno, dereference ? "stat" : "lstat", nullptr, src.out());
   }
   auto dest_status =
       dereference ? std::filesystem::symlink_status(dest_path, error_code)
@@ -3157,39 +3170,48 @@ static void CpSyncCheckPaths(const FunctionCallbackInfo<Value>& args) {
 
   bool dest_exists = !error_code && dest_status.type() !=
                                         std::filesystem::file_type::not_found;
-  bool src_is_dir = src_status.type() == std::filesystem::file_type::directory;
+  bool src_is_dir =
+      (src_status.type() == std::filesystem::file_type::directory) ||
+      (dereference && src_status.type() == std::filesystem::file_type::symlink);
 
   if (!error_code) {
     // Check if src and dest are identical.
     if (std::filesystem::equivalent(src_path, dest_path)) {
-      std::string message =
-          "src and dest cannot be the same " + dest_path.string();
-      return THROW_ERR_FS_CP_EINVAL(env, message.c_str());
+      std::u8string message =
+          u8"src and dest cannot be the same " + dest_path.u8string();
+      return THROW_ERR_FS_CP_EINVAL(
+          env, reinterpret_cast<const char*>(message.c_str()));
     }
 
     const bool dest_is_dir =
         dest_status.type() == std::filesystem::file_type::directory;
 
     if (src_is_dir && !dest_is_dir) {
-      std::string message = "Cannot overwrite non-directory " +
-                            src_path.string() + " with directory " +
-                            dest_path.string();
-      return THROW_ERR_FS_CP_DIR_TO_NON_DIR(env, message.c_str());
+      std::u8string message = u8"Cannot overwrite non-directory " +
+                              src_path.u8string() + u8" with directory " +
+                              dest_path.u8string();
+      return THROW_ERR_FS_CP_DIR_TO_NON_DIR(
+          env, reinterpret_cast<const char*>(message.c_str()));
     }
 
     if (!src_is_dir && dest_is_dir) {
-      std::string message = "Cannot overwrite directory " + dest_path.string() +
-                            " with non-directory " + src_path.string();
-      return THROW_ERR_FS_CP_NON_DIR_TO_DIR(env, message.c_str());
+      std::u8string message = u8"Cannot overwrite directory " +
+                              dest_path.u8string() + u8" with non-directory " +
+                              src_path.u8string();
+      return THROW_ERR_FS_CP_NON_DIR_TO_DIR(
+          env, reinterpret_cast<const char*>(message.c_str()));
     }
   }
 
-  std::string dest_path_str = dest_path.string();
+  std::u8string dest_path_str = dest_path.u8string();
+
   // Check if dest_path is a subdirectory of src_path.
-  if (src_is_dir && dest_path_str.starts_with(src_path.string())) {
-    std::string message = "Cannot copy " + src_path.string() +
-                          " to a subdirectory of self " + dest_path.string();
-    return THROW_ERR_FS_CP_EINVAL(env, message.c_str());
+  if (src_is_dir && dest_path_str.starts_with(src_path.u8string())) {
+    std::u8string message = u8"Cannot copy " + src_path.u8string() +
+                            u8" to a subdirectory of self " +
+                            dest_path.u8string();
+    return THROW_ERR_FS_CP_EINVAL(
+        env, reinterpret_cast<const char*>(message.c_str()));
   }
 
   auto dest_parent = dest_path.parent_path();
@@ -3200,9 +3222,11 @@ static void CpSyncCheckPaths(const FunctionCallbackInfo<Value>& args) {
          dest_parent.parent_path() != dest_parent) {
     if (std::filesystem::equivalent(
             src_path, dest_path.parent_path(), error_code)) {
-      std::string message = "Cannot copy " + src_path.string() +
-                            " to a subdirectory of self " + dest_path.string();
-      return THROW_ERR_FS_CP_EINVAL(env, message.c_str());
+      std::u8string message = u8"Cannot copy " + src_path.u8string() +
+                              u8" to a subdirectory of self " +
+                              dest_path.u8string();
+      return THROW_ERR_FS_CP_EINVAL(
+          env, reinterpret_cast<const char*>(message.c_str()));
     }
 
     // If equivalent fails, it's highly likely that dest_parent does not exist
@@ -3214,25 +3238,29 @@ static void CpSyncCheckPaths(const FunctionCallbackInfo<Value>& args) {
   }
 
   if (src_is_dir && !recursive) {
-    std::string message =
-        "Recursive option not enabled, cannot copy a directory: " +
-        src_path.string();
-    return THROW_ERR_FS_EISDIR(env, message.c_str());
+    std::u8string message =
+        u8"Recursive option not enabled, cannot copy a directory: " +
+        src_path.u8string();
+    return THROW_ERR_FS_EISDIR(env,
+                               reinterpret_cast<const char*>(message.c_str()));
   }
 
   switch (src_status.type()) {
     case std::filesystem::file_type::socket: {
-      std::string message = "Cannot copy a socket file: " + dest_path.string();
-      return THROW_ERR_FS_CP_SOCKET(env, message.c_str());
+      std::u8string message = u8"Cannot copy a socket file: " + dest_path_str;
+      return THROW_ERR_FS_CP_SOCKET(
+          env, reinterpret_cast<const char*>(message.c_str()));
     }
     case std::filesystem::file_type::fifo: {
-      std::string message = "Cannot copy a FIFO pipe: " + dest_path.string();
-      return THROW_ERR_FS_CP_FIFO_PIPE(env, message.c_str());
+      std::u8string message = u8"Cannot copy a FIFO pipe: " + dest_path_str;
+      return THROW_ERR_FS_CP_FIFO_PIPE(
+          env, reinterpret_cast<const char*>(message.c_str()));
     }
     case std::filesystem::file_type::unknown: {
-      std::string message =
-          "Cannot copy an unknown file type: " + dest_path.string();
-      return THROW_ERR_FS_CP_UNKNOWN(env, message.c_str());
+      std::u8string message =
+          u8"Cannot copy an unknown file type: " + dest_path_str;
+      return THROW_ERR_FS_CP_UNKNOWN(
+          env, reinterpret_cast<const char*>(message.c_str()));
     }
     default:
       break;
@@ -3340,8 +3368,14 @@ void BindingData::LegacyMainResolve(const FunctionCallbackInfo<Value>& args) {
 
     for (int i = 0; i < legacy_main_extensions_with_main_end; i++) {
       file_path = *initial_file_path + std::string(legacy_main_extensions[i]);
+      // TODO(anonrig): Remove this when ToNamespacedPath supports std::string
+      Local<Value> local_file_path =
+          Buffer::Copy(env->isolate(), file_path.c_str(), file_path.size())
+              .ToLocalChecked();
+      BufferValue buff_file_path(isolate, local_file_path);
+      ToNamespacedPath(env, &buff_file_path);
 
-      switch (FilePathIsFile(env, file_path)) {
+      switch (FilePathIsFile(env, buff_file_path.ToString())) {
         case BindingData::FilePathIsFileReturnType::kIsFile:
           return args.GetReturnValue().Set(i);
         case BindingData::FilePathIsFileReturnType::kIsNotFile:
@@ -3377,8 +3411,14 @@ void BindingData::LegacyMainResolve(const FunctionCallbackInfo<Value>& args) {
        i < legacy_main_extensions_package_fallback_end;
        i++) {
     file_path = *initial_file_path + std::string(legacy_main_extensions[i]);
+    // TODO(anonrig): Remove this when ToNamespacedPath supports std::string
+    Local<Value> local_file_path =
+        Buffer::Copy(env->isolate(), file_path.c_str(), file_path.size())
+            .ToLocalChecked();
+    BufferValue buff_file_path(isolate, local_file_path);
+    ToNamespacedPath(env, &buff_file_path);
 
-    switch (FilePathIsFile(env, file_path)) {
+    switch (FilePathIsFile(env, buff_file_path.ToString())) {
       case BindingData::FilePathIsFileReturnType::kIsFile:
         return args.GetReturnValue().Set(i);
       case BindingData::FilePathIsFileReturnType::kIsNotFile:

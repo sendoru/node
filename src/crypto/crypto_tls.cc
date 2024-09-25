@@ -20,12 +20,13 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "crypto/crypto_tls.h"
-#include "crypto/crypto_context.h"
-#include "crypto/crypto_common.h"
-#include "crypto/crypto_util.h"
+#include <cstdio>
+#include "async_wrap-inl.h"
 #include "crypto/crypto_bio.h"
 #include "crypto/crypto_clienthello-inl.h"
-#include "async_wrap-inl.h"
+#include "crypto/crypto_common.h"
+#include "crypto/crypto_context.h"
+#include "crypto/crypto_util.h"
 #include "debug_utils-inl.h"
 #include "memory_tracker-inl.h"
 #include "node_buffer.h"
@@ -1244,7 +1245,7 @@ void TLSWrap::EnableTrace(const FunctionCallbackInfo<Value>& args) {
 
 #if HAVE_SSL_TRACE
   if (wrap->ssl_) {
-    wrap->bio_trace_.reset(BIO_new_fp(stderr,  BIO_NOCLOSE | BIO_FP_TEXT));
+    wrap->bio_trace_ = BIOPointer::NewFp(stderr, BIO_NOCLOSE | BIO_FP_TEXT);
     SSL_set_msg_callback(wrap->ssl_.get(), [](int write_p, int version, int
           content_type, const void* buf, size_t len, SSL* ssl, void* arg)
         -> void {
@@ -1412,7 +1413,7 @@ void TLSWrap::SetPskIdentityHint(const FunctionCallbackInfo<Value>& args) {
   Utf8Value hint(isolate, args[0].As<String>());
 
   if (!SSL_use_psk_identity_hint(p->ssl_.get(), *hint)) {
-    Local<Value> err = node::ERR_TLS_PSK_SET_IDENTIY_HINT_FAILED(isolate);
+    Local<Value> err = node::ERR_TLS_PSK_SET_IDENTITY_HINT_FAILED(isolate);
     p->MakeCallback(env->onerror_string(), 1, &err);
   }
 }
